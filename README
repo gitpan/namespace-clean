@@ -2,7 +2,7 @@ NAME
     namespace::clean - Keep imports and functions out of your namespace
 
 VERSION
-    0.11
+    0.12
 
 SYNOPSIS
       package Foo;
@@ -145,6 +145,11 @@ METHODS
     Takes a class as argument and returns all currently defined functions in
     it as a hash reference with the function name as key and a typeglob
     reference to the symbol as value.
+
+BUGS
+    "namespace::clean" will clobber any formats that have the same name as a
+    deleted sub. This is due to a bug in perl that makes it impossible to
+    re-assign the FORMAT ref into a new glob.
 
 IMPLEMENTATION DETAILS
     This module works through the effect that a

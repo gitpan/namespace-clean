@@ -10,16 +10,18 @@ use warnings;
 use strict;
 
 use vars        qw( $VERSION $STORAGE_VAR $SCOPE_HOOK_KEY $SCOPE_EXPLICIT );
-use Symbol      qw( qualify_to_ref );
+use Symbol      qw( qualify_to_ref gensym );
 use B::Hooks::EndOfScope;
+use Sub::Identify qw(sub_fullname);
+use Sub::Name qw(subname);
 
 =head1 VERSION
 
-0.11
+0.12
 
 =cut
 
-$VERSION         = '0.11';
+$VERSION         = '0.12';
 $STORAGE_VAR     = '__NAMESPACE_CLEAN_STORAGE';
 
 =head1 SYNOPSIS
@@ -161,22 +163,49 @@ my $RemoveSubs = sub {
     my $store   = shift;
   SYMBOL:
     for my $f (@_) {
+        my $fq = "${cleanee}::$f";
 
         # ignore already removed symbols
         next SYMBOL if $store->{exclude}{ $f };
         no strict 'refs';
 
-        # keep original value to restore non-code slots
-        {   no warnings 'uninitialized';    # fix possible unimports
-            local *__tmp = *{ ${ "${cleanee}::" }{ $f } };
-            delete ${ "${cleanee}::" }{ $f };
-        }
+        next SYMBOL unless exists ${ "${cleanee}::" }{ $f };
 
-      SLOT:
-        # restore non-code slots to symbol
-        for my $t (qw( SCALAR ARRAY HASH IO FORMAT )) {
-            next SLOT unless defined *__tmp{ $t };
-            *{ "${cleanee}::$f" } = *__tmp{ $t };
+        if (ref(\${ "${cleanee}::" }{ $f }) eq 'GLOB') {
+            # convince the Perl debugger to work
+            # it assumes that sub_fullname($sub) can always be used to find the CV again
+            # since we are deleting the glob where the subroutine was originally
+            # defined, that assumption no longer holds, so we need to move it
+            # elsewhere and point the CV's name to the new glob.
+            my $sub = \&$fq;
+            if ( sub_fullname($sub) eq $fq ) {
+                my $new_fq = "namespace::clean::deleted::$fq";
+                subname($new_fq, $sub);
+                *{$new_fq} = $sub;
+            }
+
+            local *__tmp;
+
+            # keep original value to restore non-code slots
+            {   no warnings 'uninitialized';    # fix possible unimports
+                *__tmp = *{ ${ "${cleanee}::" }{ $f } };
+                delete ${ "${cleanee}::" }{ $f };
+            }
+
+          SLOT:
+            # restore non-code slots to symbol.
+            # omit the FORMAT slot, since perl erroneously puts it into the
+            # SCALAR slot of the new glob.
+            for my $t (qw( SCALAR ARRAY HASH IO )) {
+                next SLOT unless defined *__tmp{ $t };
+                *{ "${cleanee}::$f" } = *__tmp{ $t };
+            }
+        }
+        else {
+            # A non-glob in the stash is assumed to stand for some kind
+            # of function.  So far they all do, but the core might change
+            # this some day.  Watch perl5-porters.
+            delete ${ "${cleanee}::" }{ $f };
         }
     }
 };
@@ -311,6 +340,12 @@ sub get_functions {
         do   { no strict 'refs'; keys %{ "${class}::" } }   # symbol entries
     };
 }
+
+=head1 BUGS
+
+C<namespace::clean> will clobber any formats that have the same name as
+a deleted sub. This is due to a bug in perl that makes it impossible to
+re-assign the FORMAT ref into a new glob.
 
 =head1 IMPLEMENTATION DETAILS
 

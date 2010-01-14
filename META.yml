@@ -1,12 +1,15 @@
 ---
 abstract: 'Keep imports and functions out of your namespace'
 author:
-  - 'Robert ''phaylon'' Sedlacek <rs@474.at>'
+  - "Robert 'phaylon'' Sedlacek <rs@474.at>"
 build_requires:
+  ExtUtils::MakeMaker: 6.42
   FindBin: 0
-  Test::More: 0.62
+  Test::More: 0.88
+configure_requires:
+  ExtUtils::MakeMaker: 6.42
 distribution_type: module
-generated_by: 'Module::Install version 0.79'
+generated_by: 'Module::Install version 0.91'
 license: perl
 meta-spec:
   url: http://module-build.sourceforge.net/META-spec-v1.4.html
@@ -16,9 +19,15 @@ no_index:
   directory:
     - inc
     - t
+provides:
+  namespace::clean:
+    file: lib/namespace/clean.pm
+    version: 0.12
 requires:
   B::Hooks::EndOfScope: 0.07
+  Sub::Identify: 0.04
+  Sub::Name: 0.04
   Symbol: 0
 resources:
   license: http://dev.perl.org/licenses/
-version: 0.11
+version: 0.12

@@ -21,6 +21,9 @@ t/02-inheritance.t
 t/03-unimport.t
 t/04-except.t
 t/05-explicit-cleanee.t
+t/06-other-types.t
+t/07-debugger.t
+t/08-const-sub.t
 t/lib/CleaneeBridge.pm
 t/lib/CleaneeBridgeDirect.pm
 t/lib/CleaneeBridgeExplicit.pm
@@ -28,6 +31,7 @@ t/lib/CleaneeTarget.pm
 t/lib/ExporterTest.pm
 t/lib/FunctionWipeout.pm
 t/lib/Inheritance.pm
+t/lib/OtherTypes.pm
 t/lib/Unimport.pm
 t_author/10-pod.t
 t_author/11-pod-coverage.t
