@@ -6,7 +6,7 @@ use inc::Module::Install;
 
 name            q{namespace-clean};
 license         q{perl};
-author          q{Robert 'phaylon'' Sedlacek <rs@474.at>};
+author          q{Robert 'phaylon' Sedlacek <rs@474.at>};
 all_from        q{lib/namespace/clean.pm};
 
 build_requires  q{Test::More},                  '0.88';
@@ -18,7 +18,6 @@ requires        q{Sub::Name},                   '0.04';
 requires        q{Sub::Identify},               '0.04';
 
 auto_provides;
-auto_install;
 
 if (-e 'MANIFEST.SKIP') {
 
