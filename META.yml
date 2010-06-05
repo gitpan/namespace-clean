@@ -28,7 +28,7 @@ resources:
   bugtracker: http://rt.cpan.org/Public/Dist/Display.html?Name=namespace-clean
   homepage: http://search.cpan.org/dist/namespace-clean
   repository: git://github.com/rafl/namespace-clean.git
-version: 0.16
+version: 0.17
 x_Dist_Zilla:
   plugins:
     -

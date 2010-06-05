@@ -50,7 +50,7 @@
          "web" : "http://github.com/rafl/namespace-clean"
       }
    },
-   "version" : "0.16",
+   "version" : "0.17",
    "x_Dist_Zilla" : {
       "plugins" : [
          {

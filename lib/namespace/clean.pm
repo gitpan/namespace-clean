@@ -3,7 +3,7 @@ BEGIN {
   $namespace::clean::AUTHORITY = 'cpan:PHAYLON';
 }
 BEGIN {
-  $namespace::clean::VERSION = '0.16';
+  $namespace::clean::VERSION = '0.17';
 }
 # ABSTRACT: Keep imports and functions out of your namespace
 
