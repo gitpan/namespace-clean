@@ -1,31 +1,60 @@
-#!/usr/bin/env perl
-use warnings;
+
 use strict;
+use warnings;
 
-use inc::Module::Install;
 
-name            q{namespace-clean};
-license         q{perl};
-author          q{Robert 'phaylon' Sedlacek <rs@474.at>};
-all_from        q{lib/namespace/clean.pm};
 
-build_requires  q{Test::More},                  '0.88';
-build_requires  q{FindBin},                     0;
+use ExtUtils::MakeMaker 6.31;
 
-requires        q{B::Hooks::EndOfScope},        '0.07';
-requires        q{Package::Stash},              '0.03';
-requires        q{Sub::Name},                   '0.04';
-requires        q{Sub::Identify},               '0.04';
 
-auto_provides;
 
-if (-e 'MANIFEST.SKIP') {
+my %WriteMakefileArgs = (
+  'ABSTRACT' => 'Keep imports and functions out of your namespace',
+  'AUTHOR' => 'Robert \'phaylon\' Sedlacek <rs@474.at>, Florian Ragwitz <rafl@debian.org>, Jesse Luehrs <doy@tozt.net>',
+  'BUILD_REQUIRES' => {
+    'Exporter' => '0',
+    'FindBin' => '0',
+    'Test::More' => '0.88',
+    'constant' => '0'
+  },
+  'CONFIGURE_REQUIRES' => {
+    'ExtUtils::MakeMaker' => '6.31'
+  },
+  'DISTNAME' => 'namespace-clean',
+  'EXE_FILES' => [],
+  'LICENSE' => 'perl',
+  'NAME' => 'namespace::clean',
+  'PREREQ_PM' => {
+    'B::Hooks::EndOfScope' => '0.07',
+    'Package::Stash' => '0.03',
+    'Sub::Identify' => '0.04',
+    'Sub::Name' => '0.04',
+    'vars' => '0'
+  },
+  'VERSION' => '0.16',
+  'test' => {
+    'TESTS' => 't/*.t'
+  }
+);
 
-    print "Creating README file\n";
-    system 'pod2text lib/namespace/clean.pm > README';
 
-    print "Adding author tests to 'make test' run\n";
-    tests 't/*.t t_author/*.t';
+unless ( eval { ExtUtils::MakeMaker->VERSION(6.56) } ) {
+  my $br = delete $WriteMakefileArgs{BUILD_REQUIRES};
+  my $pp = $WriteMakefileArgs{PREREQ_PM};
+  for my $mod ( keys %$br ) {
+    if ( exists $pp->{$mod} ) {
+      $pp->{$mod} = $br->{$mod} if $br->{$mod} > $pp->{$mod};
+    }
+    else {
+      $pp->{$mod} = $br->{$mod};
+    }
+  }
 }
 
-WriteAll;
+delete $WriteMakefileArgs{CONFIGURE_REQUIRES}
+  unless eval { ExtUtils::MakeMaker->VERSION(6.52) };
+
+WriteMakefile(%WriteMakefileArgs);
+
+
+
