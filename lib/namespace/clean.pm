@@ -3,7 +3,7 @@ BEGIN {
   $namespace::clean::AUTHORITY = 'cpan:PHAYLON';
 }
 BEGIN {
-  $namespace::clean::VERSION = '0.17';
+  $namespace::clean::VERSION = '0.18';
 }
 # ABSTRACT: Keep imports and functions out of your namespace
 
@@ -138,7 +138,10 @@ sub unimport {
 sub get_class_store {
     my ($pragma, $class) = @_;
     my $stash = Package::Stash->new($class);
-    return $stash->get_package_symbol("%$STORAGE_VAR");
+    my $var = "%$STORAGE_VAR";
+    $stash->add_package_symbol($var, {})
+        unless $stash->has_package_symbol($var);
+    return $stash->get_package_symbol($var);
 }
 
 
