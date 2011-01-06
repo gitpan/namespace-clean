@@ -24,7 +24,7 @@
       "runtime" : {
          "requires" : {
             "B::Hooks::EndOfScope" : "0.07",
-            "Package::Stash" : "0.18",
+            "Package::Stash" : "0.22",
             "Sub::Identify" : "0.04",
             "Sub::Name" : "0.04",
             "vars" : 0
@@ -52,7 +52,7 @@
          "web" : "http://github.com/rafl/namespace-clean"
       }
    },
-   "version" : "0.19",
+   "version" : "0.20",
    "x_Dist_Zilla" : {
       "plugins" : [
          {

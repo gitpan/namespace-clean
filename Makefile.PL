@@ -26,12 +26,12 @@ my %WriteMakefileArgs = (
   'NAME' => 'namespace::clean',
   'PREREQ_PM' => {
     'B::Hooks::EndOfScope' => '0.07',
-    'Package::Stash' => '0.18',
+    'Package::Stash' => '0.22',
     'Sub::Identify' => '0.04',
     'Sub::Name' => '0.04',
     'vars' => '0'
   },
-  'VERSION' => '0.19',
+  'VERSION' => '0.20',
   'test' => {
     'TESTS' => 't/*.t'
   }
