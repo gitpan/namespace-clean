@@ -1,21 +1,17 @@
 Changes
-LICENSE
-MANIFEST
-META.json
-META.yml
-Makefile.PL
-README
-dist.ini
 lib/namespace/clean.pm
+Makefile.PL
+MANIFEST			This list of files
 t/00-basic.t
 t/01-function-wipeout.t
 t/02-inheritance.t
 t/03-unimport.t
 t/04-except.t
 t/05-explicit-cleanee.t
+t/05-syntax-error.t
 t/06-other-types.t
 t/08-const-sub.t
-t/author-07-debugger.t
+t/10-pure-perl.t
 t/lib/CleaneeBridge.pm
 t/lib/CleaneeBridgeDirect.pm
 t/lib/CleaneeBridgeExplicit.pm
@@ -24,8 +20,7 @@ t/lib/ExporterTest.pm
 t/lib/FunctionWipeout.pm
 t/lib/Inheritance.pm
 t/lib/OtherTypes.pm
+t/lib/SyntaxError.pm
 t/lib/Unimport.pm
-t/release-eol.t
-t/release-no-tabs.t
-t/release-pod-coverage.t
-t/release-pod-syntax.t
+xt/author/07-debugger.t
+META.yml                                 Module meta-data (added by MakeMaker)

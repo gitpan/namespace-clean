@@ -1,179 +1,54 @@
 package namespace::clean;
-BEGIN {
-  $namespace::clean::AUTHORITY = 'cpan:PHAYLON';
-}
-BEGIN {
-  $namespace::clean::VERSION = '0.20';
-}
 # ABSTRACT: Keep imports and functions out of your namespace
 
 use warnings;
 use strict;
 
 use vars qw( $STORAGE_VAR );
-use Sub::Name 0.04 qw(subname);
-use Sub::Identify 0.04 qw(sub_fullname);
-use Package::Stash 0.22;
-use B::Hooks::EndOfScope 0.07;
+use Package::Stash;
+
+our $VERSION = '0.20_01';
 
 $STORAGE_VAR = '__NAMESPACE_CLEAN_STORAGE';
 
+BEGIN {
+  if (eval {
+    require B::Hooks::EndOfScope;
+    B::Hooks::EndOfScope->VERSION('0.07');  # when changing also change in Makefile.PL
+    1
+  } ) {
+    B::Hooks::EndOfScope->import('on_scope_end');
+  }
+  else {
+    eval <<'PP' or die $@;
 
-my $RemoveSubs = sub {
+  {
+    package namespace::clean::_ScopeGuard;
 
-    my $cleanee = shift;
-    my $store   = shift;
-    my $cleanee_stash = Package::Stash->new($cleanee);
-    my $deleted_stash = Package::Stash->new("namespace::clean::deleted::$cleanee");
-  SYMBOL:
-    for my $f (@_) {
-        my $variable = "&$f";
-        # ignore already removed symbols
-        next SYMBOL if $store->{exclude}{ $f };
+    sub arm { bless [ $_[1] ] }
 
-        next SYMBOL unless $cleanee_stash->has_symbol($variable);
+    sub DESTROY { $_[0]->[0]->() }
+  }
 
-        if (ref(\$cleanee_stash->namespace->{$f}) eq 'GLOB') {
-            # convince the Perl debugger to work
-            # it assumes that sub_fullname($sub) can always be used to find the CV again
-            # since we are deleting the glob where the subroutine was originally
-            # defined, that assumption no longer holds, so we need to move it
-            # elsewhere and point the CV's name to the new glob.
-            my $sub = $cleanee_stash->get_symbol($variable);
-            if ( sub_fullname($sub) eq ($cleanee_stash->name . "::$f") ) {
-                my $new_fq = $deleted_stash->name . "::$f";
-                subname($new_fq, $sub);
-                $deleted_stash->add_symbol($variable, $sub);
-            }
-        }
+  use Tie::Hash ();
 
-        my ($scalar, $array, $hash, $io) = map {
-            $cleanee_stash->get_symbol($_ . $f)
-        } '$', '@', '%', '';
-        $cleanee_stash->remove_glob($f);
-        for my $var (['$', $scalar], ['@', $array], ['%', $hash], ['', $io]) {
-            next unless defined $var->[1];
-            $cleanee_stash->add_symbol($var->[0] . $f, $var->[1]);
-        }
-    }
-};
+  sub on_scope_end (&) {
+    $^H |= 0x020000;
 
-sub clean_subroutines {
-    my ($nc, $cleanee, @subs) = @_;
-    $RemoveSubs->($cleanee, {}, @subs);
-}
-
-
-sub import {
-    my ($pragma, @args) = @_;
-
-    my (%args, $is_explicit);
-
-  ARG:
-    while (@args) {
-
-        if ($args[0] =~ /^\-/) {
-            my $key = shift @args;
-            my $value = shift @args;
-            $args{ $key } = $value;
-        }
-        else {
-            $is_explicit++;
-            last ARG;
-        }
-    }
-
-    my $cleanee = exists $args{ -cleanee } ? $args{ -cleanee } : scalar caller;
-    if ($is_explicit) {
-        on_scope_end {
-            $RemoveSubs->($cleanee, {}, @args);
-        };
+    if( my $stack = tied( %^H ) ) {
+      push @$stack, namespace::clean::_ScopeGuard->arm(shift);
     }
     else {
-
-        # calling class, all current functions and our storage
-        my $functions = $pragma->get_functions($cleanee);
-        my $store     = $pragma->get_class_store($cleanee);
-        my $stash     = Package::Stash->new($cleanee);
-
-        # except parameter can be array ref or single value
-        my %except = map {( $_ => 1 )} (
-            $args{ -except }
-            ? ( ref $args{ -except } eq 'ARRAY' ? @{ $args{ -except } } : $args{ -except } )
-            : ()
-        );
-
-        # register symbols for removal, if they have a CODE entry
-        for my $f (keys %$functions) {
-            next if     $except{ $f };
-            next unless $stash->has_symbol("&$f");
-            $store->{remove}{ $f } = 1;
-        }
-
-        # register EOF handler on first call to import
-        unless ($store->{handler_is_installed}) {
-            on_scope_end {
-                $RemoveSubs->($cleanee, $store, keys %{ $store->{remove} });
-            };
-            $store->{handler_is_installed} = 1;
-        }
-
-        return 1;
+      tie( %^H, 'Tie::ExtraHash', namespace::clean::_ScopeGuard->arm(shift) );
     }
+  }
+
+  1;
+
+PP
+
+  }
 }
-
-
-sub unimport {
-    my ($pragma, %args) = @_;
-
-    # the calling class, the current functions and our storage
-    my $cleanee   = exists $args{ -cleanee } ? $args{ -cleanee } : scalar caller;
-    my $functions = $pragma->get_functions($cleanee);
-    my $store     = $pragma->get_class_store($cleanee);
-
-    # register all unknown previous functions as excluded
-    for my $f (keys %$functions) {
-        next if $store->{remove}{ $f }
-             or $store->{exclude}{ $f };
-        $store->{exclude}{ $f } = 1;
-    }
-
-    return 1;
-}
-
-
-sub get_class_store {
-    my ($pragma, $class) = @_;
-    my $stash = Package::Stash->new($class);
-    my $var = "%$STORAGE_VAR";
-    $stash->add_symbol($var, {})
-        unless $stash->has_symbol($var);
-    return $stash->get_symbol($var);
-}
-
-
-sub get_functions {
-    my ($pragma, $class) = @_;
-
-    my $stash = Package::Stash->new($class);
-    return {
-        map { $_ => $stash->get_symbol("&$_") }
-            $stash->list_all_symbols('CODE')
-    };
-}
-
-
-no warnings;
-'Danger! Laws of Thermodynamics may not apply.'
-
-__END__
-=pod
-
-=encoding utf-8
-
-=head1 NAME
-
-namespace::clean - Keep imports and functions out of your namespace
 
 =head1 SYNOPSIS
 
@@ -234,9 +109,9 @@ be a module exporting an C<import> method along with some functions:
 If you just want to C<-except> a single sub, you can pass it directly.
 For more than one value you have to use an array reference.
 
-=head2 Explicitely removing functions when your scope is compiled
+=head2 Explicitly removing functions when your scope is compiled
 
-It is also possible to explicitely tell C<namespace::clean> what packages
+It is also possible to explicitly tell C<namespace::clean> what packages
 to remove when the surrounding scope has finished compiling. Here is an
 example:
 
@@ -301,10 +176,143 @@ subroutines B<immediately> and not wait for scope end. If you want to have this
 effect at a specific time (e.g. C<namespace::clean> acts on scope compile end)
 it is your responsibility to make sure it runs at that time.
 
+=cut
+
+my $sub_utils_loaded;
+my $DebuggerRename = sub {
+  my ($f, $sub, $cleanee_stash, $deleted_stash) = @_;
+
+  if (! defined $sub_utils_loaded ) {
+    $sub_utils_loaded = do {
+      my $sn_ver = 0.04;
+      eval { require Sub::Name; Sub::Name->VERSION($sn_ver) }
+        or die "Sub::Name $sn_ver required when running under -d or equivalent: $@";
+
+      my $si_ver = 0.04;
+      eval { require Sub::Identify; Sub::Identify->VERSION($si_ver) }
+        or die "Sub::Identify $si_ver required when running under -d or equivalent: $@";
+
+      1;
+    } ? 1 : 0;
+  }
+
+  if ( Sub::Identify::sub_fullname($sub) eq ($cleanee_stash->name . "::$f") ) {
+    my $new_fq = $deleted_stash->name . "::$f";
+    Sub::Name::subname($new_fq, $sub);
+    $deleted_stash->add_symbol("&$f", $sub);
+  }
+};
+
+my $RemoveSubs = sub {
+    my $cleanee = shift;
+    my $store   = shift;
+    my $cleanee_stash = Package::Stash->new($cleanee);
+    my $deleted_stash;
+
+  SYMBOL:
+    for my $f (@_) {
+
+        # ignore already removed symbols
+        next SYMBOL if $store->{exclude}{ $f };
+
+        my $sub = $cleanee_stash->get_symbol("&$f")
+          or next SYMBOL;
+
+        if ($^P and ref(\$cleanee_stash->namespace->{$f}) eq 'GLOB') {
+            # convince the Perl debugger to work
+            # it assumes that sub_fullname($sub) can always be used to find the CV again
+            # since we are deleting the glob where the subroutine was originally
+            # defined, that assumption no longer holds, so we need to move it
+            # elsewhere and point the CV's name to the new glob.
+            $DebuggerRename->(
+              $f,
+              $sub,
+              $cleanee_stash,
+              $deleted_stash ||= Package::Stash->new("namespace::clean::deleted::$cleanee"),
+            );
+        }
+
+        my @symbols = map {
+            my $name = $_ . $f;
+            my $def = $cleanee_stash->get_symbol($name);
+            defined($def) ? [$name, $def] : ()
+        } '$', '@', '%', '';
+
+        $cleanee_stash->remove_glob($f);
+
+        $cleanee_stash->add_symbol(@$_) for @symbols;
+    }
+};
+
+sub clean_subroutines {
+    my ($nc, $cleanee, @subs) = @_;
+    $RemoveSubs->($cleanee, {}, @subs);
+}
+
 =head2 import
 
 Makes a snapshot of the current defined functions and installs a
 L<B::Hooks::EndOfScope> hook in the current scope to invoke the cleanups.
+
+=cut
+
+sub import {
+    my ($pragma, @args) = @_;
+
+    my (%args, $is_explicit);
+
+  ARG:
+    while (@args) {
+
+        if ($args[0] =~ /^\-/) {
+            my $key = shift @args;
+            my $value = shift @args;
+            $args{ $key } = $value;
+        }
+        else {
+            $is_explicit++;
+            last ARG;
+        }
+    }
+
+    my $cleanee = exists $args{ -cleanee } ? $args{ -cleanee } : scalar caller;
+    if ($is_explicit) {
+        on_scope_end {
+            $RemoveSubs->($cleanee, {}, @args);
+        };
+    }
+    else {
+
+        # calling class, all current functions and our storage
+        my $functions = $pragma->get_functions($cleanee);
+        my $store     = $pragma->get_class_store($cleanee);
+        my $stash     = Package::Stash->new($cleanee);
+
+        # except parameter can be array ref or single value
+        my %except = map {( $_ => 1 )} (
+            $args{ -except }
+            ? ( ref $args{ -except } eq 'ARRAY' ? @{ $args{ -except } } : $args{ -except } )
+            : ()
+        );
+
+        # register symbols for removal, if they have a CODE entry
+        for my $f (keys %$functions) {
+            next if     $except{ $f };
+            next unless $stash->has_symbol("&$f");
+            $store->{remove}{ $f } = 1;
+        }
+
+        # register EOF handler on first call to import
+        unless ($store->{handler_is_installed}) {
+            on_scope_end {
+                $RemoveSubs->($cleanee, $store, keys %{ $store->{remove} });
+            };
+            $store->{handler_is_installed} = 1;
+        }
+
+        return 1;
+    }
+}
 
 =head2 unimport
 
@@ -314,16 +322,59 @@ This method will be called when you do a
 
 It will start a new section of code that defines functions to clean up.
 
+=cut
+
+sub unimport {
+    my ($pragma, %args) = @_;
+
+    # the calling class, the current functions and our storage
+    my $cleanee   = exists $args{ -cleanee } ? $args{ -cleanee } : scalar caller;
+    my $functions = $pragma->get_functions($cleanee);
+    my $store     = $pragma->get_class_store($cleanee);
+
+    # register all unknown previous functions as excluded
+    for my $f (keys %$functions) {
+        next if $store->{remove}{ $f }
+             or $store->{exclude}{ $f };
+        $store->{exclude}{ $f } = 1;
+    }
+
+    return 1;
+}
+
 =head2 get_class_store
 
 This returns a reference to a hash in a passed package containing
 information about function names included and excluded from removal.
+
+=cut
+
+sub get_class_store {
+    my ($pragma, $class) = @_;
+    my $stash = Package::Stash->new($class);
+    my $var = "%$STORAGE_VAR";
+    $stash->add_symbol($var, {})
+        unless $stash->has_symbol($var);
+    return $stash->get_symbol($var);
+}
 
 =head2 get_functions
 
 Takes a class as argument and returns all currently defined functions
 in it as a hash reference with the function name as key and a typeglob
 reference to the symbol as value.
+
+=cut
+
+sub get_functions {
+    my ($pragma, $class) = @_;
+
+    my $stash = Package::Stash->new($class);
+    return {
+        map { $_ => $stash->get_symbol("&$_") }
+            $stash->list_all_symbols('CODE')
+    };
+}
 
 =head1 IMPLEMENTATION DETAILS
 
@@ -342,6 +393,14 @@ will be stable in future releases.
 Just for completeness sake, if you want to remove the symbol completely,
 use C<undef> instead.
 
+=head1 CAVEATS
+
+This module is fully functional in a pure-perl environment, where
+L<Variable::Magic>, a L<B::Hooks::EndOfScope> dependency, may not be
+available. However in this case this module falls back to a
+L<tie()|perlfunc/tie> of L<%^H|perlvar/%^H>  which may or may not interfere
+with some crack you may be doing independently of namespace::clean.
+
 =head1 SEE ALSO
 
 L<B::Hooks::EndOfScope>
@@ -352,7 +411,7 @@ Many thanks to Matt S Trout for the inspiration on the whole idea.
 
 =head1 AUTHORS
 
-=over 4
+=over
 
 =item *
 
@@ -366,14 +425,19 @@ Florian Ragwitz <rafl@debian.org>
 
 Jesse Luehrs <doy@tozt.net>
 
+=item *
+
+Peter Rabbitson <ribasushi@cpan.org>
+
 =back
 
 =head1 COPYRIGHT AND LICENSE
 
 This software is copyright (c) 2011 by Robert 'phaylon' Sedlacek.
 
-This is free software; you can redistribute it and/or modify it under
-the same terms as the Perl 5 programming language system itself.
+This is free software; you can redistribute it and/or modify it under the same terms as the Perl 5 programming language system itself.
 
 =cut
 
+no warnings;
+'Danger! Laws of Thermodynamics may not apply.'
