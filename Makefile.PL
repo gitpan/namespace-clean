@@ -13,11 +13,12 @@ my %BUILD_DEPS = (
 
 my %RUN_DEPS = (
   'Package::Stash' => '0.23',
-  can_cc() ? (
-    'B::Hooks::EndOfScope' => '0.07', # when changing, also change version in namespace/clean.pm
-    is_smoker() ? ( 'Devel::Hide' => 0 ) : (),  # make sure we smoke the pure-perl version
-  ) : (),
 );
+
+my %OPT_RUN_DEPS = (can_cc() ? (
+  'B::Hooks::EndOfScope' => '0.07', # when changing, also change version in namespace/clean.pm
+  is_smoker() ? ( 'Devel::Hide' => 0 ) : (),  # make sure we smoke the pure-perl version
+) : () );
 
 my %META_BITS = (
   resources => {
@@ -26,7 +27,7 @@ my %META_BITS = (
     # EUMM not supporting nested meta :(
     #repository => {
     #  type => 'git',
-    #  url => 'git://git.shadowcat.co.uk:p5sagit/namespace-clean.git',
+    #  url => 'git://git.shadowcat.co.uk/p5sagit/namespace-clean.git',
     #  web => 'http://git.shadowcat.co.uk/gitweb/gitweb.cgi?p=p5sagit/namespace-clean.git',
     #}
     #bugtracker => {
@@ -34,7 +35,7 @@ my %META_BITS = (
     #  web => 'http://rt.cpan.org/Public/Dist/Display.html?Name=namespace-clean',
     #},
 
-    repository => 'git://git.shadowcat.co.uk:p5sagit/namespace-clean.git',
+    repository => 'git://git.shadowcat.co.uk/p5sagit/namespace-clean.git',
     bugtracker => 'http://rt.cpan.org/Public/Dist/Display.html?Name=namespace-clean',
   },
 );
@@ -46,7 +47,7 @@ my %WriteMakefileArgs = (
   'AUTHOR' => 'Robert \'phaylon\' Sedlacek <rs@474.at>, Florian Ragwitz <rafl@debian.org>, Jesse Luehrs <doy@tozt.net>',
 
   'PREREQ_PM' => {
-    %RUN_DEPS,
+    %RUN_DEPS, %OPT_RUN_DEPS,
     $mymeta_works ? () : (%BUILD_DEPS),
   },
 

@@ -7,14 +7,21 @@ use strict;
 use vars qw( $STORAGE_VAR );
 use Package::Stash;
 
-our $VERSION = '0.20_01';
+our $VERSION = '0.21';
 
 $STORAGE_VAR = '__NAMESPACE_CLEAN_STORAGE';
 
 BEGIN {
+
+  use warnings;
+  use strict;
+
+  # when changing also change in Makefile.PL
+  my $b_h_eos_req = '0.07';
+
   if (eval {
     require B::Hooks::EndOfScope;
-    B::Hooks::EndOfScope->VERSION('0.07');  # when changing also change in Makefile.PL
+    B::Hooks::EndOfScope->VERSION($b_h_eos_req);
     1
   } ) {
     B::Hooks::EndOfScope->import('on_scope_end');
@@ -22,24 +29,58 @@ BEGIN {
   else {
     eval <<'PP' or die $@;
 
+  use Tie::Hash ();
+
+  {
+    package namespace::clean::_TieHintHash;
+
+    use warnings;
+    use strict;
+
+    use base 'Tie::ExtraHash';
+  }
+
   {
     package namespace::clean::_ScopeGuard;
+
+    use warnings;
+    use strict;
 
     sub arm { bless [ $_[1] ] }
 
     sub DESTROY { $_[0]->[0]->() }
   }
 
-  use Tie::Hash ();
 
   sub on_scope_end (&) {
     $^H |= 0x020000;
 
     if( my $stack = tied( %^H ) ) {
+      if ( (my $c = ref $stack) ne 'namespace::clean::_TieHintHash') {
+        die <<EOE;
+========================================================================
+               !!!   F A T A L   E R R O R   !!!
+
+                 foreign tie() of %^H detected
+========================================================================
+
+namespace::clean is currently operating in pure-perl fallback mode, because
+your system is lacking the necessary dependency B::Hooks::EndOfScope $b_h_eos_req.
+In this mode namespace::clean expects to be able to tie() the hinthash %^H,
+however it is apparently already tied by means unknown to the tie-class
+$c
+
+Since this is a no-win situation execution will abort here and now. Please
+try to find out which other module is relying on hinthash tie() ability,
+and file a bug for both the perpetrator and namespace::clean, so that the
+authors can figure out an acceptable way of moving forward.
+
+EOE
+      }
       push @$stack, namespace::clean::_ScopeGuard->arm(shift);
     }
     else {
-      tie( %^H, 'Tie::ExtraHash', namespace::clean::_ScopeGuard->arm(shift) );
+      tie( %^H, 'namespace::clean::_TieHintHash', namespace::clean::_ScopeGuard->arm(shift) );
     }
   }
 
@@ -396,10 +437,13 @@ use C<undef> instead.
 =head1 CAVEATS
 
 This module is fully functional in a pure-perl environment, where
-L<Variable::Magic>, a L<B::Hooks::EndOfScope> dependency, may not be
-available. However in this case this module falls back to a
+L<B::Hooks::EndOfScope> (with the XS dependency L<Variable::Magic>), may
+not be available. However in this case this module falls back to a
 L<tie()|perlfunc/tie> of L<%^H|perlvar/%^H>  which may or may not interfere
 with some crack you may be doing independently of namespace::clean.
+
+If you want to ensure that your codebase is protected from this unlikely
+clash, you need to explicitly depend on L<B::Hooks::EndOfScope>.
 
 =head1 SEE ALSO
 
