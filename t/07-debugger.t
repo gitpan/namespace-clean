@@ -1,20 +1,20 @@
 use Test::More;
 
 BEGIN {
-    plan skip_all => 'Only applicable on perl >= 5.8.9'
-        if $] <= 5.008008;
+  # shut up the debugger
+  $ENV{PERLDB_OPTS} = 'NonStop';
+
+  # work aroud the regex + P::S::XS buggery on
+  # < 5.8.6
+  require Package::Stash;
+}
+
+BEGIN {
 
 #line 1
 #!/usr/bin/perl -d
 #line 10
 
-    push @DB::typeahead, "c", "q";
-
-    # try to shut it up at least a little bit
-    open my $out, ">", \my $out_buf;
-    $DB::OUT = $out;
-    open my $in, "<", \my $in_buf;
-    $DB::IN = $in;
 }
 
 {

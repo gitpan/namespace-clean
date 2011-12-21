@@ -7,7 +7,7 @@ use strict;
 use vars qw( $STORAGE_VAR );
 use Package::Stash;
 
-our $VERSION = '0.21';
+our $VERSION = '0.21_01';
 
 $STORAGE_VAR = '__NAMESPACE_CLEAN_STORAGE';
 
@@ -19,7 +19,7 @@ BEGIN {
   # when changing also change in Makefile.PL
   my $b_h_eos_req = '0.07';
 
-  if (eval {
+  if (! $ENV{NAMESPACE_CLEAN_USE_PP} and eval {
     require B::Hooks::EndOfScope;
     B::Hooks::EndOfScope->VERSION($b_h_eos_req);
     1
@@ -80,7 +80,10 @@ EOE
       push @$stack, namespace::clean::_ScopeGuard->arm(shift);
     }
     else {
+      my %old_contents = %^H;
+      %^H = ();
       tie( %^H, 'namespace::clean::_TieHintHash', namespace::clean::_ScopeGuard->arm(shift) );
+      $^H{$_} = $old_contents{$_} for keys %old_contents;
     }
   }
 
@@ -90,6 +93,10 @@ PP
 
   }
 }
+
+=head1 NAME
+
+namespace::clean - Keep imports and functions out of your namespace
 
 =head1 SYNOPSIS
 
@@ -219,27 +226,51 @@ it is your responsibility to make sure it runs at that time.
 
 =cut
 
+# Constant to optimise away the unused code branches
+use constant RENAME_SUB => $] > 5.008_008_9 && $] < 5.013_006_1;
+{ no strict; delete ${__PACKAGE__."::"}{RENAME_SUB} }
+
+# In perl 5.8.9-5.12, it assumes that sub_fullname($sub) can
+# always be used to find the CV again.
+# In perl 5.8.8 and 5.14, it assumes that the name of the glob
+# passed to entersub can be used to find the CV.
+# since we are deleting the glob where the subroutine was originally
+# defined, those assumptions no longer hold.
+#
+# So in 5.8.9-5.12 we need to move it elsewhere and point the
+# CV's name to the new glob.
+#
+# In 5.8.8 and 5.14 we move it elsewhere and rename the
+# original glob by assigning the new glob back to it.
 my $sub_utils_loaded;
-my $DebuggerRename = sub {
+my $DebuggerFixup = sub {
   my ($f, $sub, $cleanee_stash, $deleted_stash) = @_;
 
-  if (! defined $sub_utils_loaded ) {
-    $sub_utils_loaded = do {
-      my $sn_ver = 0.04;
-      eval { require Sub::Name; Sub::Name->VERSION($sn_ver) }
-        or die "Sub::Name $sn_ver required when running under -d or equivalent: $@";
+  if (RENAME_SUB) {
+    if (! defined $sub_utils_loaded ) {
+      $sub_utils_loaded = do {
 
-      my $si_ver = 0.04;
-      eval { require Sub::Identify; Sub::Identify->VERSION($si_ver) }
-        or die "Sub::Identify $si_ver required when running under -d or equivalent: $@";
+        # when changing version also change in Makefile.PL
+        my $sn_ver = 0.04;
+        eval { require Sub::Name; Sub::Name->VERSION($sn_ver) }
+          or die "Sub::Name $sn_ver required when running under -d or equivalent: $@";
 
-      1;
-    } ? 1 : 0;
+        # when changing version also change in Makefile.PL
+        my $si_ver = 0.04;
+        eval { require Sub::Identify; Sub::Identify->VERSION($si_ver) }
+          or die "Sub::Identify $si_ver required when running under -d or equivalent: $@";
+
+        1;
+      } ? 1 : 0;
+    }
+
+    if ( Sub::Identify::sub_fullname($sub) eq ($cleanee_stash->name . "::$f") ) {
+      my $new_fq = $deleted_stash->name . "::$f";
+      Sub::Name::subname($new_fq, $sub);
+      $deleted_stash->add_symbol("&$f", $sub);
+    }
   }
-
-  if ( Sub::Identify::sub_fullname($sub) eq ($cleanee_stash->name . "::$f") ) {
-    my $new_fq = $deleted_stash->name . "::$f";
-    Sub::Name::subname($new_fq, $sub);
+  else {
     $deleted_stash->add_symbol("&$f", $sub);
   }
 };
@@ -259,18 +290,21 @@ my $RemoveSubs = sub {
         my $sub = $cleanee_stash->get_symbol("&$f")
           or next SYMBOL;
 
-        if ($^P and ref(\$cleanee_stash->namespace->{$f}) eq 'GLOB') {
-            # convince the Perl debugger to work
-            # it assumes that sub_fullname($sub) can always be used to find the CV again
-            # since we are deleting the glob where the subroutine was originally
-            # defined, that assumption no longer holds, so we need to move it
-            # elsewhere and point the CV's name to the new glob.
-            $DebuggerRename->(
-              $f,
-              $sub,
-              $cleanee_stash,
-              $deleted_stash ||= Package::Stash->new("namespace::clean::deleted::$cleanee"),
-            );
+        my $need_debugger_fixup =
+          $^P
+            &&
+          ref(my $globref = \$cleanee_stash->namespace->{$f}) eq 'GLOB'
+        ;
+
+        if ($need_debugger_fixup) {
+          # convince the Perl debugger to work
+          # see the comment on top of $DebuggerFixup
+          $DebuggerFixup->(
+            $f,
+            $sub,
+            $cleanee_stash,
+            $deleted_stash ||= Package::Stash->new("namespace::clean::deleted::$cleanee"),
+          );
         }
 
         my @symbols = map {
@@ -280,6 +314,13 @@ my $RemoveSubs = sub {
         } '$', '@', '%', '';
 
         $cleanee_stash->remove_glob($f);
+
+        # if this perl needs no renaming trick we need to
+        # rename the original glob after the fact
+        # (see commend of $DebuggerFixup
+        if (!RENAME_SUB && $need_debugger_fixup) {
+          *$globref = $deleted_stash->namespace->{$f};
+        }
 
         $cleanee_stash->add_symbol(@$_) for @symbols;
     }
