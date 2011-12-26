@@ -4,7 +4,7 @@
       "Robert 'phaylon' Sedlacek <rs@474.at>, Florian Ragwitz <rafl@debian.org>, Jesse Luehrs <doy@tozt.net>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.62, CPAN::Meta::Converter version 2.112150",
+   "generated_by" : "ExtUtils::MakeMaker version 6.6302, CPAN::Meta::Converter version 2.112621",
    "license" : [
       "perl_5"
    ],
@@ -36,7 +36,7 @@
          }
       }
    },
-   "release_status" : "testing",
+   "release_status" : "stable",
    "resources" : {
       "bugtracker" : {
          "web" : "http://rt.cpan.org/Public/Dist/Display.html?Name=namespace-clean"
@@ -46,5 +46,5 @@
          "url" : "git://git.shadowcat.co.uk/p5sagit/namespace-clean.git"
       }
    },
-   "version" : "0.21_02"
+   "version" : "0.22"
 }
