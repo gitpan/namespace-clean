@@ -6,14 +6,14 @@ use strict;
 use vars qw( $STORAGE_VAR );
 use Package::Stash;
 
-our $VERSION = '0.22';
+our $VERSION = '0.23';
 
 $STORAGE_VAR = '__NAMESPACE_CLEAN_STORAGE';
 
 # FIXME - all of this buggery will migrate to B::H::EOS soon
 BEGIN {
   # when changing also change in Makefile.PL
-  my $b_h_eos_req = '0.07';
+  my $b_h_eos_req = '0.10';
 
   if (! $ENV{NAMESPACE_CLEAN_USE_PP} and eval {
     require B::Hooks::EndOfScope;
@@ -166,7 +166,7 @@ it is your responsibility to make sure it runs at that time.
 
 # Constant to optimise away the unused code branches
 use constant FIXUP_NEEDED => $] < 5.015_005_1;
-use constant FIXUP_RENAME_SUB => $] > 5.008_008_9 && $] < 5.013_006_1;
+use constant FIXUP_RENAME_SUB => $] > 5.008_008_9 && $] < 5.013_005_1;
 {
   no strict;
   delete ${__PACKAGE__."::"}{FIXUP_NEEDED};
